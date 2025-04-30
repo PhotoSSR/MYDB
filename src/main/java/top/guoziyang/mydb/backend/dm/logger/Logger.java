@@ -12,6 +12,7 @@ import top.guoziyang.mydb.backend.utils.Parser;
 import top.guoziyang.mydb.common.Error;
 
 public interface Logger {
+    //必须实现的功能：记录，截断，读取下一个，rewind？，关闭
     void log(byte[] data);
     void truncate(long x) throws Exception;
     byte[] next();
