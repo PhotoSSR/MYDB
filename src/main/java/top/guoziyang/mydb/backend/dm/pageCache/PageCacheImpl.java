@@ -44,35 +44,44 @@ public class PageCacheImpl extends AbstractCache<Page> implements PageCache {
 
     public int newPage(byte[] initData) {
         int pgno = pageNumbers.incrementAndGet();
+        //新建page实例，参数为页码，数据，cache
+        //因为新建所以cache为null
         Page pg = new PageImpl(pgno, initData, null);
         flush(pg);
         return pgno;
     }
 
     public Page getPage(int pgno) throws Exception {
+        //调用泛型抽象cache的get
         return get((long)pgno);
     }
 
     /**
      * 根据pageNumber从数据库文件中读取页数据，并包裹成Page
      */
+    //重写父类抽象类里面的从data get到cache
     @Override
     protected Page getForCache(long key) throws Exception {
+        //以pageNo为key
         int pgno = (int)key;
+        //偏移量
         long offset = PageCacheImpl.pageOffset(pgno);
-
+        //预留一页大小
         ByteBuffer buf = ByteBuffer.allocate(PAGE_SIZE);
         fileLock.lock();
         try {
+            //位移，读取
             fc.position(offset);
             fc.read(buf);
         } catch(IOException e) {
             Panic.panic(e);
         }
         fileLock.unlock();
+        //页面应有的属性：pageCache，用来release cache
         return new PageImpl(pgno, buf.array(), this);
     }
 
+    //将脏页面保存
     @Override
     protected void releaseForCache(Page pg) {
         if(pg.isDirty()) {
@@ -80,8 +89,10 @@ public class PageCacheImpl extends AbstractCache<Page> implements PageCache {
             pg.setDirty(false);
         }
     }
-
+    
     public void release(Page page) {
+        //源于抽象cache的强行release
+        //release的逻辑是传入pageNo对应的key
         release((long)page.getPageNumber());
     }
 
@@ -95,6 +106,7 @@ public class PageCacheImpl extends AbstractCache<Page> implements PageCache {
 
         fileLock.lock();
         try {
+            //将当前data写入page
             ByteBuffer buf = ByteBuffer.wrap(pg.getData());
             fc.position(offset);
             fc.write(buf);
@@ -109,17 +121,21 @@ public class PageCacheImpl extends AbstractCache<Page> implements PageCache {
     public void truncateByBgno(int maxPgno) {
         long size = pageOffset(maxPgno + 1);
         try {
+            //文件截断到maxPgno为止（包含）
             file.setLength(size);
         } catch (IOException e) {
             Panic.panic(e);
         }
+        //改变记录的最大页数
         pageNumbers.set(maxPgno);
     }
 
     @Override
     public void close() {
+        //删除cache内容
         super.close();
         try {
+            //关掉file
             fc.close();
             file.close();
         } catch (IOException e) {

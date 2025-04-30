@@ -18,6 +18,7 @@ public class PageX {
     public static final int MAX_FREE_SPACE = PageCache.PAGE_SIZE - OF_DATA;
 
     public static byte[] initRaw() {
+        //初始化，前两位填short数值2转为byte之后取前两位
         byte[] raw = new byte[PageCache.PAGE_SIZE];
         setFSO(raw, OF_DATA);
         return raw;
@@ -33,14 +34,21 @@ public class PageX {
     }
 
     private static short getFSO(byte[] raw) {
+        //返回一个short数据
+        //pagedata的前两位
         return Parser.parseShort(Arrays.copyOfRange(raw, 0, 2));
     }
 
     // 将raw插入pg中，返回插入位置
     public static short insert(Page pg, byte[] raw) {
         pg.setDirty(true);
+        //从data取出两位offset
+        //表示当前光标
         short offset = getFSO(pg.getData());
+        //因此从offset开始insert
         System.arraycopy(raw, 0, pg.getData(), offset, raw.length);
+        //设置新光标，把前两位写成新长度
+        //off+new
         setFSO(pg.getData(), (short)(offset + raw.length));
         return offset;
     }
@@ -51,6 +59,8 @@ public class PageX {
     }
 
     // 将raw插入pg中的offset位置，并将pg的offset设置为较大的offset
+    //就是指定index的覆盖性插入
+    //插入完检查一下光标位置，当然是最大的那个
     public static void recoverInsert(Page pg, byte[] raw, short offset) {
         pg.setDirty(true);
         System.arraycopy(raw, 0, pg.getData(), offset, raw.length);
