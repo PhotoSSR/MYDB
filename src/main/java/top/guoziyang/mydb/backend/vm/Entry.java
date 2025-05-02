@@ -23,6 +23,7 @@ public class Entry {
     private DataItem dataItem;
     private VersionManager vm;
 
+    //上层调用new
     public static Entry newEntry(VersionManager vm, DataItem dataItem, long uid) {
         if (dataItem == null) {
             return null;
@@ -34,17 +35,21 @@ public class Entry {
         return entry;
     }
 
+    //静态方法给上层vm调用，根据uid提取dataItem，最终组成entry
     public static Entry loadEntry(VersionManager vm, long uid) throws Exception {
         DataItem di = ((VersionManagerImpl)vm).dm.read(uid);
         return newEntry(vm, di, uid);
     }
 
+    //根据data和当前事务id组成entry的数据部分（xmax空余，为0）
     public static byte[] wrapEntryRaw(long xid, byte[] data) {
         byte[] xmin = Parser.long2Byte(xid);
         byte[] xmax = new byte[8];
         return Bytes.concat(xmin, xmax, data);
     }
 
+    //因为这一步所以需要在entry里面存所属的vm
+    //是cache的release
     public void release() {
         ((VersionManagerImpl)vm).releaseEntry(this);
     }
