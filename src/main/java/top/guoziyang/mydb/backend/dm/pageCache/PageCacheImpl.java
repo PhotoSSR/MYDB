@@ -93,6 +93,7 @@ public class PageCacheImpl extends AbstractCache<Page> implements PageCache {
     public void release(Page page) {
         //源于抽象cache的强行release
         //release的逻辑是传入pageNo对应的key
+
         release((long)page.getPageNumber());
     }
 

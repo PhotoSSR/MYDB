@@ -15,6 +15,8 @@ import top.guoziyang.mydb.backend.utils.Panic;
 import top.guoziyang.mydb.backend.utils.Types;
 import top.guoziyang.mydb.common.Error;
 
+//本质上是一个对dataItem的cache
+//同时还集成了对pc，log，page，tm的统筹调用
 public class DataManagerImpl extends AbstractCache<DataItem> implements DataManager {
 
     TransactionManager tm;
@@ -43,17 +45,26 @@ public class DataManagerImpl extends AbstractCache<DataItem> implements DataMana
 
     @Override
     public long insert(long xid, byte[] data) throws Exception {
+        //把data读到byte数组
+        //分为valid，size，data
         byte[] raw = DataItem.wrapDataItemRaw(data);
         if(raw.length > PageX.MAX_FREE_SPACE) {
             throw Error.DataTooLargeException;
         }
 
         PageInfo pi = null;
+        //多次循环尝试
+        //理论上一次失败后就会新建且成功
+        //设置五次以防万一
         for(int i = 0; i < 5; i ++) {
+            //寻找符合row的大小的pageIndex
             pi = pIndex.select(raw.length);
             if (pi != null) {
                 break;
             } else {
+                //创建一个新pageX，数据为initRow，即只有开头两位数字2
+                //且放入cache，cache负责给一个新的pageNo，并写入page
+                //返回的pageNo给manager
                 int newPgno = pc.newPage(PageX.initRaw());
                 pIndex.add(newPgno, PageX.MAX_FREE_SPACE);
             }
@@ -142,6 +153,7 @@ public class DataManagerImpl extends AbstractCache<DataItem> implements DataMana
 
     // 初始化pageIndex
     void fillPageIndex() {
+        //编号从1开始，且pageOne作为校验不是实际数据
         int pageNumber = pc.getPageNumber();
         for(int i = 2; i <= pageNumber; i ++) {
             Page pg = null;

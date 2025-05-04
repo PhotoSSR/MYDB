@@ -27,6 +27,7 @@ public class PageIndex {
     public void add(int pgno, int freeSpace) {
         lock.lock();
         try {
+            //添加信息，看看对应页面应该放哪 
             int number = freeSpace / THRESHOLD;
             lists[number].add(new PageInfo(pgno, freeSpace));
         } finally {
@@ -37,15 +38,22 @@ public class PageIndex {
     public PageInfo select(int spaceSize) {
         lock.lock();
         try {
+            //需要多少区间
             int number = spaceSize / THRESHOLD;
+            //不满一页就++（？）
+            //因为索引是按照从1开始
             if(number < INTERVALS_NO) number ++;
             while(number <= INTERVALS_NO) {
+                //没有能正好容纳的页，则再++，寻找更大页
                 if(lists[number].size() == 0) {
                     number ++;
                     continue;
                 }
+                //取出第一个可用页面的信息你 
                 return lists[number].remove(0);
             }
+            //说明太大了一页放不下
+            //怎么办呢
             return null;
         } finally {
             lock.unlock();

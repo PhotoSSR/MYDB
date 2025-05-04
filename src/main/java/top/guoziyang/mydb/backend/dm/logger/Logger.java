@@ -16,9 +16,10 @@ public interface Logger {
     void log(byte[] data);
     void truncate(long x) throws Exception;
     byte[] next();
+    //复位，把index改到4
     void rewind();
     void close();
-
+    //静态方法create和open
     public static Logger create(String path) {
         File f = new File(path+LoggerImpl.LOG_SUFFIX);
         try {

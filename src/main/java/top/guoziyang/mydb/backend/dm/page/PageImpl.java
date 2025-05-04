@@ -31,9 +31,9 @@ public class PageImpl implements Page {
     }
 //释放cache即由cache对象release，参数是当前pageImp
     public void release() {
-        //page的cache不一定相同
-        //因此需要在page里面存cache的引用
+       
         pc.release(this);
+        //release page调用release pc
     }
 
     public void setDirty(boolean dirty) {
