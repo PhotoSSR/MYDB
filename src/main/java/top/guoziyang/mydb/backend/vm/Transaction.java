@@ -7,12 +7,14 @@ import top.guoziyang.mydb.backend.tm.TransactionManagerImpl;
 
 // vm对一个事务的抽象
 public class Transaction {
+    //id，隔离等级，快照，错误，是否回滚
     public long xid;
     public int level;
+    //这里直接用set就行
     public Map<Long, Boolean> snapshot;
     public Exception err;
     public boolean autoAborted;
-
+    //需要用id，level，存活tx列表
     public static Transaction newTransaction(long xid, int level, Map<Long, Transaction> active) {
         Transaction t = new Transaction();
         t.xid = xid;
