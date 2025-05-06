@@ -46,7 +46,7 @@ public class DataManagerImpl extends AbstractCache<DataItem> implements DataMana
     @Override
     public long insert(long xid, byte[] data) throws Exception {
         //把data读到byte数组
-        //分为valid，size，data
+        //包装为valid，size，data
         byte[] raw = DataItem.wrapDataItemRaw(data);
         if(raw.length > PageX.MAX_FREE_SPACE) {
             throw Error.DataTooLargeException;
@@ -79,10 +79,11 @@ public class DataManagerImpl extends AbstractCache<DataItem> implements DataMana
             pg = pc.getPage(pi.pgno);
             byte[] log = Recover.insertLog(xid, pg, raw);
             logger.log(log);
-
+            //写进page
             short offset = PageX.insert(pg, raw);
-
+            //保存，释放page
             pg.release();
+            //根据地址生成uid
             return Types.addressToUid(pi.pgno, offset);
 
         } finally {

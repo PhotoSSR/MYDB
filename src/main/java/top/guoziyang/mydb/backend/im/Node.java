@@ -51,7 +51,7 @@ public class Node {
     static void setRawSibling(SubArray raw, long sibling) {
         System.arraycopy(Parser.long2Byte(sibling), 0, raw.raw, raw.start+SIBLING_OFFSET, 8);
     }
-
+    //读兄弟节点uid
     static long getRawSibling(SubArray raw) {
         return Parser.parseLong(Arrays.copyOfRange(raw.raw, raw.start+SIBLING_OFFSET, raw.start+SIBLING_OFFSET+8));
     }
@@ -81,9 +81,15 @@ public class Node {
         System.arraycopy(from.raw, offset, to.raw, to.start+NODE_HEADER_SIZE, from.end-offset);
     }
 
+
+    //想插入一个新k
     static void shiftRawKth(SubArray raw, int kth) {
+        //在原本的k+1位置上开始覆盖
         int begin = raw.start+NODE_HEADER_SIZE+(kth+1)*(8*2);
+        //终点是数据结尾
         int end = raw.start+NODE_SIZE-1;
+        //从k+1个到结尾
+        //全都
         for(int i = end; i >= begin; i --) {
             raw.raw[i] = raw.raw[i-(8*2)];
         }
@@ -114,6 +120,7 @@ public class Node {
     }
 
     static Node loadNode(BPlusTree bTree, long uid) throws Exception {
+        //某种uid存着node的数据
         DataItem di = bTree.dm.read(uid);
         assert di != null;
         Node n = new Node();
@@ -141,20 +148,27 @@ public class Node {
         long uid;
         long siblingUid;
     }
-
+    //node下寻找key
+    //找不到返回uid=0
     public SearchNextRes searchNext(long key) {
+        //读锁
         dataItem.rLock();
         try {
+            //定义一个返回单位
             SearchNextRes res = new SearchNextRes();
+            //获得key数量
             int noKeys = getRawNoKeys(raw);
             for(int i = 0; i < noKeys; i ++) {
+                //通过位移读key
                 long ik = getRawKthKey(raw, i);
+                //发现最大边界，进入下层
                 if(key < ik) {
                     res.uid = getRawKthSon(raw, i);
                     res.siblingUid = 0;
                     return res;
                 }
             }
+            //没找到？
             res.uid = 0;
             res.siblingUid = getRawSibling(raw);
             return res;
@@ -172,8 +186,10 @@ public class Node {
     public LeafSearchRangeRes leafSearchRange(long leftKey, long rightKey) {
         dataItem.rLock();
         try {
+            //从左节点开始遍历
             int noKeys = getRawNoKeys(raw);
             int kth = 0;
+            //找到第一个大于左
             while(kth < noKeys) {
                 long ik = getRawKthKey(raw, kth);
                 if(ik >= leftKey) {
@@ -184,6 +200,7 @@ public class Node {
             List<Long> uids = new ArrayList<>();
             while(kth < noKeys) {
                 long ik = getRawKthKey(raw, kth);
+                //右边界
                 if(ik <= rightKey) {
                     uids.add(getRawKthSon(raw, kth));
                     kth ++;
@@ -191,7 +208,10 @@ public class Node {
                     break;
                 }
             }
+            //uids存了所有严格【left，right】
             long siblingUid = 0;
+            //说明没找到合适的右边界，直到k-1还符合
+            //则展开对兄弟的搜索
             if(kth == noKeys) {
                 siblingUid = getRawSibling(raw);
             }
@@ -216,10 +236,13 @@ public class Node {
         dataItem.before();
         try {
             success = insert(uid, key);
+            //成功插入在当前左侧，返回的兄弟就是当前节点
             if(!success) {
                 res.siblingUid = getRawSibling(raw);
                 return res;
             }
+
+            //如果需要分裂则再处理
             if(needSplit()) {
                 try {
                     SplitRes r = split();
@@ -253,8 +276,10 @@ public class Node {
                 break;
             }
         }
+        //到了最右侧还是没地方
         if(kth == noKeys && getRawSibling(raw) != 0) return false;
 
+        //是叶子节点
         if(getRawIfLeaf(raw)) {
             shiftRawKth(raw, kth);
             setRawKthKey(raw, key, kth);
@@ -280,17 +305,27 @@ public class Node {
     }
 
     private SplitRes split() throws Exception {
+        //复制一个新右边节点用来分裂
         SubArray nodeRaw = new SubArray(new byte[NODE_SIZE], 0, NODE_SIZE);
+        //新节点保持原节点属性，数据对半分
+        //且右节点继承兄弟
         setRawIsLeaf(nodeRaw, getRawIfLeaf(raw));
         setRawNoKeys(nodeRaw, BALANCE_NUMBER);
         setRawSibling(nodeRaw, getRawSibling(raw));
         copyRawFromKth(raw, nodeRaw, BALANCE_NUMBER);
+        //写入
         long son = tree.dm.insert(TransactionManagerImpl.SUPER_XID, nodeRaw.raw);
+
+        //本节点变为左节点，兄弟是新生右节点
+        //key数量只保留一半
         setRawNoKeys(raw, BALANCE_NUMBER);
         setRawSibling(raw, son);
 
+        //返回新的右节点
+        //用来告诉原本的父节点
         SplitRes res = new SplitRes();
         res.newSon = son;
+        //这个new key是左节点的key
         res.newKey = getRawKthKey(nodeRaw, 0);
         return res;
     }

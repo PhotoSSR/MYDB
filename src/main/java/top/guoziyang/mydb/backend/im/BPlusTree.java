@@ -22,12 +22,17 @@ public class BPlusTree {
     Lock bootLock;
 
     public static long create(DataManager dm) throws Exception {
+        //生成空树的数据
         byte[] rawRoot = Node.newNilRootRaw();
+        //用超级事务插入一个新root，返回uid
         long rootUid = dm.insert(TransactionManagerImpl.SUPER_XID, rawRoot);
+        //再存储uid作为di，返回新uid用来操作即bootUid
         return dm.insert(TransactionManagerImpl.SUPER_XID, Parser.long2Byte(rootUid));
     }
 
     public static BPlusTree load(long bootUid, DataManager dm) throws Exception {
+        //返回的是根节点的di
+        //bootxxx相当于遍历的指针
         DataItem bootDataItem = dm.read(bootUid);
         assert bootDataItem != null;
         BPlusTree t = new BPlusTree();
@@ -41,6 +46,7 @@ public class BPlusTree {
     private long rootUid() {
         bootLock.lock();
         try {
+            //data方法完成了前缀位移，得到的就是data
             SubArray sa = bootDataItem.data();
             return Parser.parseLong(Arrays.copyOfRange(sa.raw, sa.start, sa.start+8));
         } finally {
@@ -51,9 +57,13 @@ public class BPlusTree {
     private void updateRootUid(long left, long right, long rightKey) throws Exception {
         bootLock.lock();
         try {
+            //生成新版数据
             byte[] rootRaw = Node.newRootRaw(left, right, rightKey);
+            //生成新uid，完成insert
             long newRootUid = dm.insert(TransactionManagerImpl.SUPER_XID, rootRaw);
+            //修改di必须环节
             bootDataItem.before();
+            //数据覆盖
             SubArray diRaw = bootDataItem.data();
             System.arraycopy(Parser.long2Byte(newRootUid), 0, diRaw.raw, diRaw.start, 8);
             bootDataItem.after(TransactionManagerImpl.SUPER_XID);
@@ -62,11 +72,13 @@ public class BPlusTree {
         }
     }
 
+    //递归寻找包含key的叶子节点的uid
     private long searchLeaf(long nodeUid, long key) throws Exception {
+        //先取node，判断node是不是leaf
         Node node = Node.loadNode(this, nodeUid);
         boolean isLeaf = node.isLeaf();
         node.release();
-
+        //是的话就返回，不是就寻找next
         if(isLeaf) {
             return nodeUid;
         } else {
@@ -75,11 +87,16 @@ public class BPlusTree {
         }
     }
 
+    //搜索下一层的key
+    //返回下一层的应该插入的位置的uid
     private long searchNext(long nodeUid, long key) throws Exception {
         while(true) {
             Node node = Node.loadNode(this, nodeUid);
+            //在当前node的下层寻找
+            //可能返回正确uid或0
             SearchNextRes res = node.searchNext(key);
             node.release();
+            //返回id为零说明不在当前，进入兄弟节点
             if(res.uid != 0) return res.uid;
             nodeUid = res.siblingUid;
         }
@@ -91,9 +108,11 @@ public class BPlusTree {
 
     public List<Long> searchRange(long leftKey, long rightKey) throws Exception {
         long rootUid = rootUid();
+        //找到leftKey所在节点
         long leafUid = searchLeaf(rootUid, leftKey);
         List<Long> uids = new ArrayList<>();
         while(true) {
+            //load的时候相当于new了dataItem，需要release
             Node leaf = Node.loadNode(this, leafUid);
             LeafSearchRangeRes res = leaf.leafSearchRange(leftKey, rightKey);
             leaf.release();
@@ -120,16 +139,23 @@ public class BPlusTree {
         long newNode, newKey;
     }
 
+    //在nodeUid为根的树中
+    //插入一个uid，key的node
     private InsertRes insert(long nodeUid, long uid, long key) throws Exception {
+        //先load root
         Node node = Node.loadNode(this, nodeUid);
         boolean isLeaf = node.isLeaf();
         node.release();
 
         InsertRes res = null;
+        //如过root就是叶子
         if(isLeaf) {
+            //插入且分裂
             res = insertAndSplit(nodeUid, uid, key);
         } else {
+            //找到应该存放的最左节点
             long next = searchNext(nodeUid, key);
+            //递归进入下层
             InsertRes ir = insert(next, uid, key);
             if(ir.newNode != 0) {
                 res = insertAndSplit(nodeUid, ir.newNode, ir.newKey);

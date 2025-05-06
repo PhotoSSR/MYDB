@@ -36,22 +36,30 @@ public class LockTable {
     public Lock add(long xid, long uid) throws Exception {
         lock.lock();
         try {
+            //已经得到锁，回null
             if(isInList(x2u, xid, uid)) {
                 return null;
             }
+            //uid空闲，双表登记，返回null
             if(!u2x.containsKey(uid)) {
                 u2x.put(uid, xid);
                 putIntoList(x2u, xid, uid);
                 return null;
             }
+            //记录xid等待uid
             waitU.put(xid, uid);
-            //putIntoList(wait, xid, uid);
+            //记录uid被xid等待
             putIntoList(wait, uid, xid);
+            //检测死锁，拒绝请求
             if(hasDeadLock()) {
+                //要求xid释放所有资源
                 waitU.remove(xid);
                 removeFromList(wait, uid, xid);
                 throw Error.DeadlockException;
             }
+            //没有死锁，生成等待锁
+            //这个等锁说明资源锁在lt中，lt分配时放开锁其他线程才能继续
+            //返回锁
             Lock l = new ReentrantLock();
             l.lock();
             waitLock.put(xid, l);
@@ -61,17 +69,20 @@ public class LockTable {
             lock.unlock();
         }
     }
-
+    
+    //释放所有锁
     public void remove(long xid) {
         lock.lock();
         try {
             List<Long> l = x2u.get(xid);
             if(l != null) {
                 while(l.size() > 0) {
+                    //释放的uid再利用
                     Long uid = l.remove(0);
                     selectNewXID(uid);
                 }
             }
+            //删除xid的所有等待请求和已有资源
             waitU.remove(xid);
             x2u.remove(xid);
             waitLock.remove(xid);
@@ -84,15 +95,20 @@ public class LockTable {
     // 从等待队列中选择一个xid来占用uid
     private void selectNewXID(long uid) {
         u2x.remove(uid);
+        //取出需要当前uid的所有xid
         List<Long> l = wait.get(uid);
         if(l == null) return;
         assert l.size() > 0;
 
         while(l.size() > 0) {
             long xid = l.remove(0);
+            //没有成功进入waitLock，说明死锁被拒绝了，下一个
             if(!waitLock.containsKey(xid)) {
                 continue;
             } else {
+                //分配，记录在u-x
+                //取消waitlock，waitu
+                //waitlock解锁
                 u2x.put(uid, xid);
                 Lock lo = waitLock.remove(xid);
                 waitU.remove(xid);
@@ -100,7 +116,7 @@ public class LockTable {
                 break;
             }
         }
-
+        //发生于唯一的等待者已经被刷掉，故删除
         if(l.size() == 0) wait.remove(uid);
     }
 

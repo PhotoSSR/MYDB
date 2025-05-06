@@ -42,7 +42,7 @@ public class VersionManagerImpl extends AbstractCache<Entry> implements VersionM
 
         Entry entry = null;
         try {
-            entry = super.get(uid);
+            entry = super.get(uid); 
         } catch(Exception e) {
             if(e == Error.NullEntryException) {
                 return null;
@@ -102,13 +102,18 @@ public class VersionManagerImpl extends AbstractCache<Entry> implements VersionM
             try {
                 l = lt.add(xid, uid);
             } catch(Exception e) {
+                //说明发生死锁，自动回滚
                 t.err = Error.ConcurrentUpdateException;
                 internAbort(xid, true);
                 t.autoAborted = true;
                 throw t.err;
             }
+
+            //说明在等待
             if(l != null) {
+                //等待获取锁，lt释放，即分配资源后才会成功
                 l.lock();
+                //上一步执行完说明已经拿到锁，unlock进行下一步
                 l.unlock();
             }
 
@@ -133,9 +138,12 @@ public class VersionManagerImpl extends AbstractCache<Entry> implements VersionM
 
     @Override
     public long begin(int level) {
+        //新建一个activeTx
         lock.lock();
         try {
+            //由tm来定义新id
             long xid = tm.begin();
+            //具体生成在vm
             Transaction t = Transaction.newTransaction(xid, level, activeTransaction);
             activeTransaction.put(xid, t);
             return xid;
@@ -170,6 +178,7 @@ public class VersionManagerImpl extends AbstractCache<Entry> implements VersionM
 
     @Override
     public void abort(long xid) {
+        //手动
         internAbort(xid, false);
     }
 
@@ -177,12 +186,16 @@ public class VersionManagerImpl extends AbstractCache<Entry> implements VersionM
         lock.lock();
         Transaction t = activeTransaction.get(xid);
         if(!autoAborted) {
+            //手动回滚还需要删除map中数据
             activeTransaction.remove(xid);
         }
         lock.unlock();
 
+        //如果已经被回滚了就返回
         if(t.autoAborted) return;
+        //删除lt中所有有关锁
         lt.remove(xid);
+        //将tx状态修改为已经回滚
         tm.abort(xid);
     }
 

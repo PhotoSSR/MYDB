@@ -10,7 +10,7 @@ import java.util.concurrent.locks.ReentrantLock;
 import top.guoziyang.mydb.backend.utils.Panic;
 import top.guoziyang.mydb.backend.utils.Parser;
 import top.guoziyang.mydb.common.Error;
-
+//这只是一个读写文件的manager，本身不负责创建tx，本身不占用内存
 public class TransactionManagerImpl implements TransactionManager {
 
     // XID文件头长度
