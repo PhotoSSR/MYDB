@@ -27,6 +27,7 @@ public class Field {
     private long index;
     private BPlusTree bt;
 
+    //从uid加载，parseSelf解析，完成所有初始化
     public static Field loadField(Table tb, long uid) {
         byte[] raw = null;
         try {
@@ -60,6 +61,7 @@ public class Field {
         position += res.next;
         this.index = Parser.parseLong(Arrays.copyOfRange(raw, position, position+8));
         if(index != 0) {
+            //如果存在index就加载b+树
             try {
                 bt = BPlusTree.load(index, ((TableManagerImpl)tb.tbm).dm);
             } catch(Exception e) {
@@ -69,15 +71,28 @@ public class Field {
         return this;
     }
 
+    //新建field
+    //逻辑：
+    // 1. 传入type合规
+    // 2. 新建field并属性赋值
+    // 3. 如果存在index就创建b+树
+    // 4. 并把树的uid写入field
+    // 5. 写入磁盘
+    // 6. 通过写入磁盘返回的uid赋值field
+
     public static Field createField(Table tb, long xid, String fieldName, String fieldType, boolean indexed) throws Exception {
+        //传入type合规
         typeCheck(fieldType);
         Field f = new Field(tb, fieldName, fieldType, 0);
         if(indexed) {
+            //如果存在index就创建b+树
+            //并把树的uid写入field
             long index = BPlusTree.create(((TableManagerImpl)tb.tbm).dm);
             BPlusTree bt = BPlusTree.load(index, ((TableManagerImpl)tb.tbm).dm);
             f.index = index;
             f.bt = bt;
         }
+        //写入磁盘
         f.persistSelf(xid);
         return f;
     }
@@ -86,6 +101,8 @@ public class Field {
         byte[] nameRaw = Parser.string2Byte(fieldName);
         byte[] typeRaw = Parser.string2Byte(fieldType);
         byte[] indexRaw = Parser.long2Byte(index);
+        //uid因为记录而存在
+        //因此只能在这一步insert时候设置
         this.uid = ((TableManagerImpl)tb.tbm).vm.insert(xid, Bytes.concat(nameRaw, typeRaw, indexRaw));
     }
 
@@ -99,6 +116,7 @@ public class Field {
         return index != 0;
     }
 
+    //插入b+树
     public void insert(Object key, long uid) throws Exception {
         long uKey = value2Uid(key);
         bt.insert(uKey, uid);
@@ -157,6 +175,7 @@ public class Field {
         int shift;
     }
 
+    //返回值和偏移量
     public ParseValueRes parserValue(byte[] raw) {
         ParseValueRes res = new ParseValueRes();
         switch(fieldType) {
@@ -177,6 +196,7 @@ public class Field {
         return res;
     }
 
+    //打印str形式
     public String printValue(Object v) {
         String str = null;
         switch(fieldType) {
@@ -193,6 +213,7 @@ public class Field {
         return str;
     }
 
+    //打印field属性
     @Override
     public String toString() {
         return new StringBuilder("(")
@@ -204,11 +225,14 @@ public class Field {
             .toString();
     }
 
+    //计算查找范围
+    //传入类包括域名，符号，值
     public FieldCalRes calExp(SingleExpression exp) throws Exception {
         Object v = null;
         FieldCalRes res = new FieldCalRes();
         switch(exp.compareOp) {
             case "<":
+                //严格小于所以left为最小值，right为v-1
                 res.left = 0;
                 v = string2Value(exp.value);
                 res.right = value2Uid(v);

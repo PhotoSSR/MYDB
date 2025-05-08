@@ -54,6 +54,7 @@ public class Booter {
         this.file = file;
     }
 
+    // 加载booter文件以buf返回
     public byte[] load() {
         byte[] buf = null;
         try {

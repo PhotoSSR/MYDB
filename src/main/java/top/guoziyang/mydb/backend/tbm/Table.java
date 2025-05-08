@@ -76,6 +76,7 @@ public class Table {
         this.nextUid = nextUid;
     }
 
+    //根据read出的数据自我赋值
     private Table parseSelf(byte[] raw) {
         int position = 0;
         ParseStringRes res = Parser.parseString(raw);
@@ -93,6 +94,7 @@ public class Table {
     }
 
     private Table persistSelf(long xid) throws Exception {
+        //记录的数据：name，下一张表uid，所有field的uid
         byte[] nameRaw = Parser.string2Byte(name);
         byte[] nextRaw = Parser.long2Byte(nextUid);
         byte[] fieldRaw = new byte[0];
@@ -132,8 +134,10 @@ public class Table {
             byte[] raw = ((TableManagerImpl)tbm).vm.read(xid, uid);
             if(raw == null) continue;
 
+            //删除旧记录
             ((TableManagerImpl)tbm).vm.delete(xid, uid);
-
+            //用map是因为一条entry有多个field的数据
+            //新数据基于旧数据，仅重新put改变的field
             Map<String, Object> entry = parseEntry(raw);
             entry.put(fd.fieldName, value);
             raw = entry2Raw(entry);
@@ -294,6 +298,7 @@ public class Table {
         return raw;
     }
 
+    //重写toString方法 返回table的信息
     @Override
     public String toString() {
         StringBuilder sb = new StringBuilder("{");

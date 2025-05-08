@@ -18,11 +18,17 @@ import top.guoziyang.mydb.backend.utils.Parser;
 import top.guoziyang.mydb.backend.vm.VersionManager;
 import top.guoziyang.mydb.common.Error;
 
+//tablemanager 的实现类
+//tablemanager 管理table的创建 插入 读取 更新 删除 以及show
+//通过cache读取table，然后调用table类的方法，传入参数包括指令和xid
+
 public class TableManagerImpl implements TableManager {
     VersionManager vm;
     DataManager dm;
     private Booter booter;
+    //table名和table的映射  
     private Map<String, Table> tableCache;
+    //xid和table的映射
     private Map<Long, List<Table>> xidTableCache;
     private Lock lock;
     
@@ -57,6 +63,9 @@ public class TableManagerImpl implements TableManager {
 
     @Override
     public BeginRes begin(Begin begin) {
+        //tablemanager 的begin需要调用vm的begin
+        //vm的begin需要调用tm的begin
+        //参数为level
         BeginRes res = new BeginRes();
         int level = begin.isRepeatableRead?1:0;
         res.xid = vm.begin(level);
@@ -73,14 +82,17 @@ public class TableManagerImpl implements TableManager {
         vm.abort(xid);
         return "abort".getBytes();
     }
+    //show 需要返回所有table的信息 以及xid对应的table信息
     @Override
     public byte[] show(long xid) {
         lock.lock();
         try {
             StringBuilder sb = new StringBuilder();
+            //返回所有table的信息
             for (Table tb : tableCache.values()) {
                 sb.append(tb.toString()).append("\n");
             }
+            //返回xid对应的table信息
             List<Table> t = xidTableCache.get(xid);
             if(t == null) {
                 return "\n".getBytes();
@@ -97,12 +109,18 @@ public class TableManagerImpl implements TableManager {
     public byte[] create(long xid, Create create) throws Exception {
         lock.lock();
         try {
+            //如果table已经存在 抛出异常
             if(tableCache.containsKey(create.tableName)) {
                 throw Error.DuplicatedTableException;
             }
+            //创建table
             Table table = Table.createTable(this, firstTableUid(), xid, create);
+            //更新firstTableUid
             updateFirstTableUid(table.uid);
+            //将table加入tableCache
             tableCache.put(create.tableName, table);
+            //将table加入xidTableCache
+            //table与xid关联
             if(!xidTableCache.containsKey(xid)) {
                 xidTableCache.put(xid, new ArrayList<>());
             }
