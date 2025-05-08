@@ -148,7 +148,7 @@ public class BPlusTree {
         node.release();
 
         InsertRes res = null;
-        //如过root就是叶子
+        //递归找到叶子节点再插入
         if(isLeaf) {
             //插入且分裂
             res = insertAndSplit(nodeUid, uid, key);
@@ -158,6 +158,9 @@ public class BPlusTree {
             //递归进入下层
             InsertRes ir = insert(next, uid, key);
             if(ir.newNode != 0) {
+                //发生分裂，在父层插入新节点
+                //new node是新右节点
+                //newKey是右节点第一个key
                 res = insertAndSplit(nodeUid, ir.newNode, ir.newKey);
             } else {
                 res = new InsertRes();
@@ -171,7 +174,9 @@ public class BPlusTree {
             Node node = Node.loadNode(this, nodeUid);
             InsertAndSplitRes iasr = node.insertAndSplit(uid, key);
             node.release();
+            //返回兄弟uid说明不成功
             if(iasr.siblingUid != 0) {
+                //转到兄弟节点尝试插入
                 nodeUid = iasr.siblingUid;
             } else {
                 InsertRes res = new InsertRes();

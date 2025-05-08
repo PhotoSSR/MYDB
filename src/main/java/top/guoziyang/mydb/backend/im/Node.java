@@ -236,7 +236,7 @@ public class Node {
         dataItem.before();
         try {
             success = insert(uid, key);
-            //成功插入在当前左侧，返回的兄弟就是当前节点
+            //如果插入不成功且存在兄弟节点返回false
             if(!success) {
                 res.siblingUid = getRawSibling(raw);
                 return res;
@@ -268,6 +268,9 @@ public class Node {
     private boolean insert(long uid, long key) {
         int noKeys = getRawNoKeys(raw);
         int kth = 0;
+        //对于分裂的情况
+        //这里会查到父节点的位置
+        //父节点的key是父最大，大于newRight Key
         while(kth < noKeys) {
             long ik = getRawKthKey(raw, kth);
             if(ik < key) {
@@ -276,19 +279,33 @@ public class Node {
                 break;
             }
         }
-        //到了最右侧还是没地方
+        //到了最右侧还是没地方，且存在兄弟节点
         if(kth == noKeys && getRawSibling(raw) != 0) return false;
 
         //是叶子节点
         if(getRawIfLeaf(raw)) {
+            //从k向后覆盖
             shiftRawKth(raw, kth);
+            //在k更新
             setRawKthKey(raw, key, kth);
             setRawKthSon(raw, uid, kth);
+            //更新数量
             setRawNoKeys(raw, noKeys+1);
-        } else {
+        } 
+        //注意正常insert是进不去这个else
+        //保证初始insert发生在叶子
+        //进入这个else说明发生分裂
+        else {
+            //获取分裂前的key，即分裂后newRight真正的key
             long kk = getRawKthKey(raw, kth);
+            
+            //设置newLeft的key
+            //所有newLeft node < rightMin
             setRawKthKey(raw, key, kth);
+            //从k+1开始向后覆盖
+            //完成后k+1位置为无用
             shiftRawKth(raw, kth+1);
+            //在k+1位设置newRight
             setRawKthKey(raw, kk, kth+1);
             setRawKthSon(raw, uid, kth+1);
             setRawNoKeys(raw, noKeys+1);
@@ -321,6 +338,7 @@ public class Node {
         setRawNoKeys(raw, BALANCE_NUMBER);
         setRawSibling(raw, son);
 
+        //至此，在当前层的分裂已经完成
         //返回新的右节点
         //用来告诉原本的父节点
         SplitRes res = new SplitRes();
