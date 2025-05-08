@@ -190,6 +190,11 @@ public class Table {
         return entry;
     }
 
+    //逻辑希望优化
+    //该函数负责分配任务
+    //遍历where的条件，根据是否为index查询，进行全表查或者b+树查
+    //b+树查用call调用field的cal进行查询
+    //再根据and or进行逻辑判断并集或交集
     private List<Long> parseWhere(Where where) throws Exception {
         long l0=0, r0=0, l1=0, r1=0;
         boolean single = false;
