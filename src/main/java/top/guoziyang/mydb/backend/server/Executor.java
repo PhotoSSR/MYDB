@@ -30,6 +30,8 @@ public class Executor {
         }
     }
 
+
+    //先建立联系，begin获得xid，一个线程一个exe一个xid
     public byte[] execute(byte[] sql) throws Exception {
         System.out.println("Execute: " + new String(sql));
         Object stat = Parser.Parse(sql);

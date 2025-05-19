@@ -5,6 +5,7 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
@@ -18,7 +19,7 @@ public class LockTable {
     private Map<Long, List<Long>> x2u;  // 某个XID已经获得的资源的UID列表
     private Map<Long, Long> u2x;        // UID被某个XID持有
     private Map<Long, List<Long>> wait; // 正在等待UID的XID列表
-    private Map<Long, Lock> waitLock;   // 正在等待资源的XID的锁
+    private Map<Long, Condition> waitCondition;   // 正在等待资源的XID的锁
     private Map<Long, Long> waitU;      // XID正在等待的UID
     private Lock lock;
 
@@ -26,14 +27,14 @@ public class LockTable {
         x2u = new HashMap<>();
         u2x = new HashMap<>();
         wait = new HashMap<>();
-        waitLock = new HashMap<>();
+        waitCondition = new HashMap<>();
         waitU = new HashMap<>();
         lock = new ReentrantLock();
     }
 
     // 不需要等待则返回null，否则返回锁对象
     // 会造成死锁则抛出异常
-    public Lock add(long xid, long uid) throws Exception {
+    public Condition add(long xid, long uid) throws Exception {
         lock.lock();
         try {
             //已经得到锁，回null
@@ -60,10 +61,10 @@ public class LockTable {
             //没有死锁，生成等待锁
             //这个等锁说明资源锁在lt中，lt分配时放开锁其他线程才能继续
             //返回锁
-            Lock l = new ReentrantLock();
-            l.lock();
-            waitLock.put(xid, l);
-            return l;
+            Lock clock = new ReentrantLock();
+            Condition condition = clock.newCondition();
+            waitCondition.put(xid, condition);
+            return condition;
 
         } finally {
             lock.unlock();
@@ -85,7 +86,7 @@ public class LockTable {
             //删除xid的所有等待请求和已有资源
             waitU.remove(xid);
             x2u.remove(xid);
-            waitLock.remove(xid);
+            waitCondition.remove(xid);
 
         } finally {
             lock.unlock();
@@ -102,17 +103,17 @@ public class LockTable {
 
         while(l.size() > 0) {
             long xid = l.remove(0);
-            //没有成功进入waitLock，说明死锁被拒绝了，下一个
-            if(!waitLock.containsKey(xid)) {
+            //公平锁，取第一个
+            if(!waitCondition.containsKey(xid)) {
                 continue;
             } else {
                 //分配，记录在u-x
-                //取消waitlock，waitu
-                //waitlock解锁
+                //取消waitCondition，waitu
+                //condition唤醒解锁
                 u2x.put(uid, xid);
-                Lock lo = waitLock.remove(xid);
+                Condition condition = waitCondition.remove(xid);
                 waitU.remove(xid);
-                lo.unlock();
+                condition.signalAll();
                 break;
             }
         }

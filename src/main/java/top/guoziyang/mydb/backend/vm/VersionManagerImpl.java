@@ -2,6 +2,7 @@ package top.guoziyang.mydb.backend.vm;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
@@ -98,9 +99,14 @@ public class VersionManagerImpl extends AbstractCache<Entry> implements VersionM
             if(!Visibility.isVisible(tm, t, entry)) {
                 return false;
             }
-            Lock l = null;
+            Condition condition = null;
             try {
-                l = lt.add(xid, uid);
+                condition = lt.add(xid, uid);
+                //说明在等待
+                //等待获取锁，lt释放，即分配资源后才会成功
+                if(condition != null) {
+                    condition.await();
+                }
             } catch(Exception e) {
                 //说明发生死锁，自动回滚
                 t.err = Error.ConcurrentUpdateException;
@@ -109,14 +115,7 @@ public class VersionManagerImpl extends AbstractCache<Entry> implements VersionM
                 throw t.err;
             }
 
-            //说明在等待
-            if(l != null) {
-                //等待获取锁，lt释放，即分配资源后才会成功
-                l.lock();
-                //上一步执行完说明已经拿到锁，unlock进行下一步
-                l.unlock();
-            }
-
+            
             if(entry.getXmax() == xid) {
                 return false;
             }

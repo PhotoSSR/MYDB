@@ -53,6 +53,7 @@ class HandleSocket implements Runnable {
     private Socket socket;
     private TableManager tbm;
 
+    //所有线程共用一个tbm
     public HandleSocket(Socket socket, TableManager tbm) {
         this.socket = socket;
         this.tbm = tbm;
